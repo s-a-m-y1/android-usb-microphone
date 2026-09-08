@@ -212,16 +212,16 @@ class Engine:
     # -------------------------------------------------------- connect loop
     def _connect_loop(self) -> None:
         gen = self._intent.generation
-        try:
-            self.ensure_daemon()
-        except DaemonError:
-            return
-        if self.status.state not in (AppState.READY, AppState.STREAMING,
-                                     AppState.CONNECTING, AppState.ERROR):
-            # watcher will re-evaluate; bail to avoid clobbering states
-            self._emit(state=AppState.READY)
         while (self._intent.streaming and self._intent.generation == gen
                and not self._stop_event.is_set()):
+            try:
+                self.ensure_daemon()
+            except DaemonError as e:
+                # keep retrying while the user's intent is "streaming"
+                self._emit(state=AppState.CONNECTING,
+                           message=f"{e} - retrying…")
+                self._stop_event.wait(3.0)
+                continue
             self._emit(state=AppState.CONNECTING, message="Connecting to phone…")
             try:
                 self._connect_once()
