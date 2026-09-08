@@ -67,10 +67,11 @@ Chrome use the same PulseAudio/PipeWire path and behave the same.
 ## The audio is silent / very quiet
 
 - The desktop shows a level meter — talk into the phone; it must move.
-- **Android privacy**: if the phone screen is locked (or the app is no longer
-  visible), Android 14+ mutes microphone access for the service. Keep the
-  screen on/unlocked while streaming, or disable battery optimization for
-  the app. (Tip: the phone app shows "Waiting for desktop…" vs "Connected".)
+- **Phone screen off**: Android silences an app's microphone when the screen
+  is off. The desktop app lifts this automatically over USB (appops
+  "allow" for the app's uid) on every connect — verified working. If your
+  OEM blocks it, keep the screen on; the app also holds a screen wake lock
+  while streaming so the display never times out by itself.
 - Android may be sending to a "voice call" route if the phone is in a call.
 - The capture uses the `VOICE_RECOGNITION` source (flat response, no AGC).
   If your phone routes oddly, try speaking into the bottom mic.

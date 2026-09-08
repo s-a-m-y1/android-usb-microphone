@@ -13,6 +13,7 @@ import android.media.MediaRecorder.AudioSource
 class AudioStreamer(
     private val state: StreamerState,
     private val onLevel: (rms: Float) -> Unit,
+    private val onMuted: (() -> Unit)? = null,
 ) {
     companion object {
         private const val RATE = StreamerState.SAMPLE_RATE
@@ -54,12 +55,24 @@ class AudioStreamer(
         var sent = 0L
         var levelAcc = 0.0
         var levelN = 0
+        var mutedChunks = 0   // consecutive all-zero chunks while a desktop is linked
         try {
             record.startRecording()
             while (!Thread.currentThread().isInterrupted) {
                 val n = record.read(buf, 0, chunkBytes)
                 if (n < 0) throw IllegalStateException("AudioRecord.read failed: $n")
                 if (n == 0) continue
+
+                // Android mutes us with exact zeros when the screen goes off;
+                // a live-but-quiet room still has a few LSBs of noise.
+                var allZero = true
+                for (i in 0 until n step 2) {
+                    if (buf[i].toInt() != 0 || buf[i + 1].toInt() != 0) { allZero = false; break }
+                }
+                mutedChunks = if (allZero && StreamerState.linkUp) mutedChunks + 1 else 0
+                if (mutedChunks == 125) {          // ~2.7 s of exact zeros
+                    onMuted?.invoke()
+                }
 
                 // RMS over samples for the level meter
                 var acc = 0.0

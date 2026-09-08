@@ -4,12 +4,14 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import java.io.IOException
 import java.io.OutputStream
@@ -50,6 +52,7 @@ class MicService : Service() {
     @Volatile private var running = false
     private var serverSocket: LocalServerSocket? = null
     private var acceptThread: Thread? = null
+    private var wakeLock: PowerManager.WakeLock? = null
     lateinit var state: StreamerState
         private set
 
@@ -64,6 +67,7 @@ class MicService : Service() {
             return START_NOT_STICKY
         }
         startAsForeground()
+        keepScreenOn()
         Log.i(TAG, "onStartCommand: foreground started, running=$running")
         if (!running) {
             running = true
@@ -101,6 +105,48 @@ class MicService : Service() {
             Log.e(TAG, "startForeground failed", t)
             throw t
         }
+    }
+
+    /**
+     * Android silences microphone access for an app the moment the screen
+     * goes off (while-in-use policy). The phone is on USB power while
+     * streaming, so we hold a screen wake lock for as long as the service
+     * runs - this keeps the mic hot with the phone locked or app in
+     * background.
+     */
+    private fun keepScreenOn() {
+        if (wakeLock?.isHeld == true) return
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK,
+            "aum:mic-stream").apply {
+            setReferenceCounted(false)
+            acquire(12 * 60 * 60 * 1000L)   // effectively until stop
+        }
+        Log.i(TAG, "screen wake lock held")
+    }
+
+    /**
+     * Android mutes the microphone as soon as the screen goes off (privacy
+     * policy - the platform reverts manual appops overrides within seconds).
+     * When the desktop is actively receiving but every sample is exactly
+     * zero, we know we've been muted: wake the screen back up so the stream
+     * self-heals. The phone is on USB power, so this is free.
+     */
+    private fun wakeScreenForMic() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        pm.newWakeLock(
+            PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "aum:mic-unmute").apply {
+            setReferenceCounted(false)
+            acquire(60_000L)
+        }
+        keepScreenOn()
+        Log.i(TAG, "mic muted with screen off - woke the screen")
+    }
+
+    private fun releaseScreenOn() {
+        try { wakeLock?.release() } catch (ignored: Exception) {}
+        wakeLock = null
     }
 
     /** Accept loop: one desktop client at a time; reconnects cleanly. */
@@ -151,10 +197,12 @@ class MicService : Service() {
                 ("{\"event\":\"hello\",\"rate\":${state.rate}," +
                  "\"channels\":1,\"format\":\"s16le\"}").toByteArray())
 
-            val streamer = AudioStreamer(state) { rms ->
-                sendFramed(TYPE_EVENT,
-                    "{\"event\":\"level\",\"rms\":$rms}".toByteArray())
-            }
+            val streamer = AudioStreamer(state,
+                onLevel = { rms ->
+                    sendFramed(TYPE_EVENT,
+                        "{\"event\":\"level\",\"rms\":$rms}".toByteArray())
+                },
+                onMuted = { wakeScreenForMic() })
             streamer.stream { chunk ->
                 sendFramed(TYPE_PCM, chunk)
             }
@@ -186,6 +234,7 @@ class MicService : Service() {
         state.running = false
         state.postLink(false)
         closeServer()
+        releaseScreenOn()
         super.onDestroy()
     }
 

@@ -281,6 +281,11 @@ class Engine:
             )
         hello = client.connect()
         self._client = client
+        # keep the mic hot with the phone screen off (best-effort, USB only)
+        try:
+            self.adb.grant_background_mic(dev.serial)
+        except AdbError:
+            pass
         rate = hello.get("rate", self.settings.sample_rate)
         ch = hello.get("channels", 1)
         self._emit(state=AppState.STREAMING, message="Streaming from phone",

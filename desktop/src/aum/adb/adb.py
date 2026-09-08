@@ -159,6 +159,23 @@ class Adb:
                          "android.permission.RECORD_AUDIO")
         return "Exception" not in out and "Error" not in out
 
+    def grant_background_mic(self, serial: str) -> bool:
+        """Allow the app to keep mic access while the phone screen is off.
+
+        Android silences an app's microphone when the screen goes off
+        (while-in-use policy). With USB debugging we can lift that per-app
+        via appops - best effort: OEM builds may refuse, in which case the
+        user just keeps the screen on.
+        """
+        # Best-effort: whether it took effect is visible on the level meter;
+        # if an OEM refuses, the user simply keeps the screen on.
+        self.shell(serial,
+                   "appid=$(dumpsys package com.aum.mic | "
+                   "sed -n 's/.*appId=\\([0-9]*\\).*/\\1/p'); "
+                   "test -n \"$appid\" && "
+                   "cmd appops set --uid $appid RECORD_AUDIO allow")
+        return True
+
     def stop_app(self, serial: str) -> None:
         self.shell(serial, "am", "force-stop", "com.aum.mic")
 
