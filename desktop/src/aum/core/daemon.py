@@ -40,11 +40,27 @@ class PwDaemon:
     def __init__(self, binary: Path | None = None) -> None:
         self.binary = binary or find_daemon_binary()
         self.proc: subprocess.Popen | None = None
+        self.adopted_pid: int | None = None
         self.log_path = Path.home() / ".cache" / "aum" / "aum-pw-source.log"
 
     @property
     def running(self) -> bool:
-        return self.proc is not None and self.proc.poll() is None
+        if self.proc is not None and self.proc.poll() is None:
+            return True
+        if self.adopted_pid is not None:
+            try:
+                os.kill(self.adopted_pid, 0)
+                return True
+            except (ProcessLookupError, PermissionError):
+                self.adopted_pid = None
+        return False
+
+    @staticmethod
+    def _read_pid(pid_path: str) -> int | None:
+        try:
+            return int(Path(pid_path).read_text().strip())
+        except (OSError, ValueError):
+            return None
 
     def start(self, name: str = "android_usb_mic",
               description: str = "Android USB Microphone",
@@ -53,14 +69,23 @@ class PwDaemon:
               socket_path: str | None = None) -> None:
         if self.running:
             return
+        sock = socket_path or default_socket_path()
         if self.binary is None:
             raise DaemonError(
                 "aum-pw-source is not built. Run scripts/build-desktop.sh "
                 "(needs libpipewire-0.3-dev).")
+
+        # Adopt an existing daemon (e.g. started by another app instance).
+        if self._socket_exists(sock):
+            self.adopted_pid = self._read_pid(sock + ".pid")
+            log.info("adopting running aum-pw-source (pid=%s)",
+                     self.adopted_pid)
+            return
+
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = [
             str(self.binary),
-            "--socket", socket_path or default_socket_path(),
+            "--socket", sock,
             "--name", name,
             "--description", description,
             "--rate", str(rate),
@@ -80,7 +105,7 @@ class PwDaemon:
                     f"daemon exited with code {self.proc.returncode}; "
                     f"see {self.log_path}")
             time.sleep(0.1)
-            if self._socket_exists(socket_path or default_socket_path()):
+            if self._socket_exists(sock):
                 return
         raise DaemonError("daemon did not create its control socket in time")
 
@@ -103,6 +128,12 @@ class PwDaemon:
                 self.proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 self.proc.kill()
+        elif self.adopted_pid is not None:
+            try:
+                os.kill(self.adopted_pid, 15)
+            except (ProcessLookupError, PermissionError):
+                pass
+        self.adopted_pid = None
         self.proc = None
         if hasattr(self, "_logf") and self._logf:
             self._logf.close()

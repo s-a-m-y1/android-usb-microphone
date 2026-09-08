@@ -33,6 +33,7 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <getopt.h>
 
 #include <pipewire/pipewire.h>
@@ -504,6 +505,27 @@ int main(int argc, char **argv)
     if (quiet) {
         int fd = open("/dev/null", O_WRONLY);
         if (fd >= 0) { dup2(fd, STDERR_FILENO); close(fd); }
+    }
+
+    /* Singleton guard: only one daemon per user. Without this, repeated app
+     * launches create duplicate (silent) source nodes that confuse clients. */
+    char lock_path[512];
+    snprintf(lock_path, sizeof(lock_path), "%s.lock", app.socket_path);
+    int lock_fd = open(lock_path, O_RDWR | O_CREAT, 0600);
+    if (lock_fd >= 0) {
+        if (flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
+            fprintf(stderr, "[aum-pw] another instance is already running "
+                            "(socket %s) - exiting\n", app.socket_path);
+            return 0;
+        }
+        /* keep lock_fd open for the process lifetime; pid file for managers */
+        char pid_path[512];
+        snprintf(pid_path, sizeof(pid_path), "%s.pid", app.socket_path);
+        FILE *pf = fopen(pid_path, "w");
+        if (pf) {
+            fprintf(pf, "%d\n", (int)getpid());
+            fclose(pf);
+        }
     }
 
     pw_init(&argc, &argv);

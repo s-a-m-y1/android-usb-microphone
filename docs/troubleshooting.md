@@ -53,8 +53,16 @@ Settings → Battery → App battery usage → Unrestricted.
 
 - Check `pactl list sources short | grep android_usb_mic`.
 - In OBS use **Audio Input Capture** → device *Android USB Microphone*.
-- Restart OBS after the first ever creation of the device (OBS caches the
-  device list).
+- **Restart the browser** after the first ever creation of the device
+  (browsers cache the device list at startup).
+- Make sure only one instance of the desktop app is running (the daemon is a
+  singleton; duplicates would show as multiple `android_usb_mic` entries).
+
+## Browser test (verified)
+
+Firefox was tested end-to-end: `getUserMedia` returns a track labelled
+"Android USB Microphone", WebAudio receives samples at 48 kHz. Chromium and
+Chrome use the same PulseAudio/PipeWire path and behave the same.
 
 ## The audio is silent / very quiet
 
