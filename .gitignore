@@ -1,0 +1,18 @@
+# build artifacts
+build/
+poc/classes*/
+poc/dex*/
+poc/*.jar.bak
+poc/raw.pcm
+*.apk
+
+# self-contained SDK bootstrap (downloaded by scripts/setup-android-sdk.sh)
+.sdk/
+
+# python
+__pycache__/
+*.pyc
+
+# logs / temp
+*.log
+*.raw

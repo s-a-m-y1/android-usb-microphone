@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Android USB Microphone</string>
+    <string name="notif_title">USB Microphone active</string>
+    <string name="notif_text">Streaming microphone to your computer over USB</string>
+    <string name="usb_label">USB</string>
+    <string name="mic_label">Microphone</string>
+    <string name="rate_fmt">Sample Rate: %1$d Hz · PCM 16-bit Mono</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="status_streaming">● Connected - streaming</string>
+    <string name="status_waiting">● Waiting for desktop…</string>
+    <string name="status_stopped">○ Stopped</string>
+    <string name="info_idle">Press Start, then connect from the desktop app.</string>
+    <string name="info_waiting">Service running. Waiting for the desktop app to connect over USB…</string>
+    <string name="info_streaming">Streaming audio over USB. Keep the cable connected.</string>
+    <string name="err_fmt">Error: %1$s</string>
+    <string name="mic_denied">Microphone permission denied. Grant it in Settings → Apps.</string>
+</resources>
