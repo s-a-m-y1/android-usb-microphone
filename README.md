@@ -17,6 +17,10 @@ The resulting source is a genuine PipeWire node (`Audio/Source`): it shows up
 in `pactl list sources short`, GNOME sound settings, and every app that can
 select a microphone.
 
+| Desktop (Ubuntu, GTK4/libadwaita) | Phone (Android) |
+| --- | --- |
+| ![Desktop app](docs/screenshots/desktop-app.png) | ![Phone app](docs/screenshots/phone-streaming.png) |
+
 ## Security model
 
 - The desktop talks to the phone **only through the USB cable via adb**
